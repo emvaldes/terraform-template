@@ -1,0 +1,338 @@
+name: GitHub Actions - Terraform Template
+on:
+
+####----------------------------------------------------------------------------
+  workflow_dispatch:
+    name: Manual Deployment
+    description: 'Triggering Manual Deployment'
+    inputs:
+      workspace:
+        description: 'Terraform Workspace'
+        required: false
+        default: 'dev'
+      region:
+        description: 'Target AWS Region'
+        required: false
+        default: ''
+      account:
+        description: 'Target AWS Account'
+        required: false
+        default: ''
+      accesskey:
+        description: 'Target Access Key-ID'
+        required: false
+        default: ''
+      secretkey:
+        description: 'Target Secret Access-Key'
+        required: false
+        default: ''
+      keypair-name:
+        description: 'Private Key-Pair Name'
+        required: false
+        default: ''
+      keypair-secret:
+        description: 'Private Key-Pair Secret'
+        required: false
+        default: ''
+      destroy-terraform:
+        description: 'Terraform Destroy Request'
+        required: false
+        default: true
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+      tags:
+        description: 'Terraform Template'
+####----------------------------------------------------------------------------
+  push:
+    branches: [ master ]
+##    paths-ignore:
+##      - '.github/**'
+##      - '*.md'
+    paths:
+      - workspace
+      # - '*.tf'
+      # - '*.tfvars'
+####----------------------------------------------------------------------------
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_DEFAULT_ACCOUNT: ${{ secrets.AWS_DEFAULT_ACCOUNT }}
+  AWS_DEFAULT_PROFILE: ${{ secrets.AWS_DEFAULT_PROFILE }}
+  AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  ## Terraform Operations: Deploy, Destroy
+  BACKUP_TERRAFORM: ${{ secrets.BACKUP_TERRAFORM }}
+  DEPLOY_TERRAFORM: ${{ secrets.DEPLOY_TERRAFORM }}
+  DESTROY_TERRAFORM: ${{ secrets.DESTROY_TERRAFORM }}
+  ## DEVOPS_ASSUMEROLE_POLICY
+  ## DEVOPS_BOUNDARIES_POLICY
+  ## DEVOPS_ACCESS_POLICY
+  DEVOPS_ACCESS_ROLE: ${{ secrets.DEVOPS_ACCESS_ROLE }}
+  DEVOPS_ACCOUNT_NAME: ${{ secrets.DEVOPS_ACCOUNT_NAME }}
+  DYNAMODB_DEFAULT_REGION: ${{ secrets.DYNAMODB_DEFAULT_REGION }}
+  ## INSPECT_DEPLOYMENT
+  PRIVATE_KEYPAIR_FILE: ${{ secrets.PRIVATE_KEYPAIR_FILE }}
+  PRIVATE_KEYPAIR_NAME: ${{ secrets.PRIVATE_KEYPAIR_NAME }}
+  PRIVATE_KEYPAIR_SECRET: ${{ secrets.PRIVATE_KEYPAIR_SECRET }}
+  PROVISION_TERRAFORM: ${{ secrets.PROVISION_TERRAFORM }}
+  TARGET_WORKSPACE: ${{ secrets.TARGET_WORKSPACE }}
+  UPDATE_PYTHON_LATEST: ${{ secrets.UPDATE_PYTHON_LATEST }}
+  UPDATE_SYSTEM_LATEST: ${{ secrets.UPDATE_SYSTEM_LATEST }}
+  ##
+  ## Terraform Input Parameters
+  terraform_input_params: ''
+  terraform_input_tfvars: ''
+  ## Troubleshooting Sections
+  troubleshooting: false
+####----------------------------------------------------------------------------
+jobs:
+  terraform-template:
+    runs-on: ubuntu-latest
+    steps:
+####----------------------------------------------------------------------------
+      - name: checkout
+        uses: actions/checkout@v2
+####----------------------------------------------------------------------------
+      ## Environment Variables
+      - name: Environment Variables
+        id: environment-variables
+        run: |
+          ####------------------------------------------------------------------
+          ## Parsing GitHub Action - Workflow dispatch (limited to 10 input-params)
+          echo -e "Processing File|Input-based Parameters ... [ 1-10 ]\n" ;
+          ####------------------------------------------------------------------
+          eval "echo '::set-env name=TARGET_WORKSPACE::$(
+              cat ${{ github.workspace }}/workspace \
+              | grep -vxE '[[:blank:]]*([#;].*)?' \
+              | tr -d "[:space:]"
+            )'" ;
+          ####------------------------------------------------------------------
+          eval "echo '::set-env name=SESSION_TIMESTAMP::$(date +"%y%m%d%H%M%S")'" ;
+          echo '::set-env name=AWS_ACCESS_KEY_ID::${{ secrets.AWS_ACCESS_KEY_ID }}'
+          echo '::set-env name=AWS_SECRET_ACCESS_KEY::${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          ####------------------------------------------------------------------
+          custom_workspace="${{ github.event.inputs.workspace }}" ;
+          if [[ (${#custom_workspace} -gt 0) && (${custom_workspace} != '') ]]; then
+            echo -e "       Target Workspace [input-based]: '${custom_workspace}'" ;
+            eval "echo '::set-env name=TARGET_WORKSPACE::${custom_workspace}'" ;
+          fi ;
+          ####------------------------------------------------------------------
+          cloud_region="${{ github.event.inputs.region }}" ;
+          if [[ (${#cloud_region} -gt 0 ) && (${cloud_region} != '') ]]; then
+            echo -e "    Target Cloud Region [input-based]: '${cloud_region}'" ;
+            eval "echo '::set-env name=AWS_DEFAULT_REGION::${cloud_region}'" ;
+          fi ;
+          ####------------------------------------------------------------------
+          cloud_account="${{ github.event.inputs.account }}" ;
+          if [[ (${#cloud_account} -gt 0 ) && (${cloud_account} != '') ]]; then
+            echo -e "   Target Cloud Account [input-based]: '${cloud_account}'" ;
+            eval "echo '::set-env name=AWS_DEFAULT_ACCOUNT::${cloud_account}'" ;
+          fi;
+          ####------------------------------------------------------------------
+          access_keyid="${{ github.event.inputs.accesskey }}" ;
+          if [[ (${#access_keyid} -gt 0 ) && (${access_keyid} != '') ]]; then
+            echo -e "   Target Access Key-ID [input-based]: '${access_keyid}'" ;
+            eval "echo '::set-env name=AWS_ACCESS_KEY_ID::${access_keyid}'" ;
+          fi;
+          ####------------------------------------------------------------------
+          secret_keyid="${{ github.event.inputs.secretkey }}" ;
+          if [[ (${#secret_keyid} -gt 0 ) && (${secret_keyid} != '') ]]; then
+            echo -e "   Target Secret Key-ID [input-based]: '${secret_keyid}'" ;
+            eval "echo '::set-env name=AWS_SECRET_ACCESS_KEY::${secret_keyid}'" ;
+          fi;
+          ####------------------------------------------------------------------
+          keypair_name="${{ github.event.inputs.keypair-name }}" ;
+          if [[ (${#keypair_name} -gt 0 ) && (${keypair_name} != '') ]]; then
+            echo -e "  Private Key-Pair Name [input-based]: '${keypair_name}'" ;
+            eval "echo '::set-env name=PRIVATE_KEYPAIR_NAME::${keypair_name}'" ;
+          fi;
+          ####------------------------------------------------------------------
+          keypair_secret="${{ github.event.inputs.keypair-secret }}" ;
+          if [[ (${#keypair_secret} -gt 0 ) && (${keypair_secret} != '') ]]; then
+            private_keypair_secret="$(echo -e "${keypair_secret}" | sed -e "s|;$||" | tr ';' '\n')";
+            echo -e "Private Key-Pair Secret [input-based]: \n'***'" ;
+            eval "echo '::set-env name=PRIVATE_KEYPAIR_SECRET::${private_keypair_secret}'" ;
+          fi;
+          ####------------------------------------------------------------------
+          destroy_terraform="${{ github.event.inputs.destroy-terraform }}" ;
+          if [[ (${#destroy_terraform} -gt 0 ) && (${destroy_terraform} != true) ]]; then
+            echo -e "      Destroy Terraform [input-based]: \n'${destroy_terraform}'" ;
+            eval "echo '::set-env name=DESTROY_TERRAFORM::${destroy_terraform}'" ;
+          fi;
+####----------------------------------------------------------------------------
+      ## System Requirements
+      - name: System Requirements
+        uses: emvaldes/system-requirements@master
+        id: system-requirements
+        with:
+          install-awscli-tool: true
+          install-custom-tools: 'netcat'
+          install-default-tools: true
+          install-terraform-cli: latest
+          update-operating-system: ${UPDATE_SYSTEM_LATEST}
+          update-python-version: ${UPDATE_PYTHON_LATEST}
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Installed Packages
+      - name: Installed Packages
+        id: installed-packages
+        shell: bash
+        run: |
+          ####------------------------------------------------------------------
+          jq --version;
+          tree --version;
+          aws --version;
+          terraform --version;
+####----------------------------------------------------------------------------
+      ## Terraform Parameters
+      - name: Terraform Parameters
+        id: terraform-parameters
+        shell: bash
+        run: |
+          ####------------------------------------------------------------------
+          remote_origin="$(git config --get remote.origin.url)" ;
+          route53_record="${remote_origin##*\/}" ;
+          oIFS="${IFS}" ; IFS=$'\n' ;
+          declare -a custom_params=(
+              devops_timestamp=${SESSION_TIMESTAMP}
+              devops_engineer='Eduardo Valdes'
+              devops_contact=emvaldes@hotmail.com
+              devops_listset='["ami-abc123","ami-def456"]'
+              devops_mapset='{"us-east-1":"ami-abc123","us-east-2":"ami-def456"}'
+              route53_record="${SESSION_TIMESTAMP}.${route53_record}"
+            ) ;
+          ## echo -e "\nListing Encoding entries: ..." ;
+          ## for xitem in ${custom_params[@]}; do
+          ##   encrypted=$(echo -en ${xitem} | base64 -w0 | tr -d '\n\r') ;
+          ##   decrypted=$(echo -en "${encrypted}" | base64 --decode) ;
+          ##   echo -e "${encrypted} -> ${decrypted}" ;
+          ## done ;
+          eval "echo '::set-env name=terraform_input_params::$(
+              for xitem in ${custom_params[@]}; do
+                echo -en "`echo -en ${xitem} | base64 -w0 | tr -d '\n\r'`_" ;
+              done | sed -e 's|\(.*\)\(\_\)$|\1|' ;
+            )'" ;
+          IFS="${oIFS}" ;
+          eval "echo '::set-env name=terraform_input_tfvars::configs/${TARGET_WORKSPACE}-configs.tfvars'" ;
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Requesting Credentials
+      - name: Requesting Credentials
+        uses: emvaldes/generate-credentials@master
+        id: request-credentials
+        with:
+          aws-access-key-id: ${AWS_ACCESS_KEY_ID}
+          aws-default-account: ${AWS_DEFAULT_ACCOUNT}
+          aws-default-profile: ${AWS_DEFAULT_PROFILE}
+          aws-default-region: ${AWS_DEFAULT_REGION}
+          aws-secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+          devops-access-role: ${DEVOPS_ACCESS_ROLE}
+          devops-account-name: ${DEVOPS_ACCOUNT_NAME}
+          session-timestamp: "TerraformPipeline--${SESSION_TIMESTAMP}"
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Provisioning Access
+      - name: Provisioning Access
+        uses: emvaldes/configure-access@master
+        id: provision-access
+        with:
+          private-keypair-file: ${PRIVATE_KEYPAIR_FILE}
+          private-keypair-secret: "${PRIVATE_KEYPAIR_SECRET}"
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Provision Terraform
+      - name: Provision Terraform
+        uses: emvaldes/terraform-controller@master
+        id: provision-terraform
+        with:
+          provision-terraform: ${PROVISION_TERRAFORM}
+          terraform-input-params: "${terraform_input_params}"
+          terraform-input-tfvars: "${terraform_input_tfvars}"
+## Terraform Log-levels: TRACE, DEBUG, INFO, WARN or ERROR
+          terraform-loglevel: false
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Deploy Terraform
+      - name: Deploy Terraform
+        uses: emvaldes/terraform-controller@master
+        id: deploy-terraform
+        with:
+          deploy-terraform: ${DEPLOY_TERRAFORM}
+## Terraform Log-levels: TRACE, DEBUG, INFO, WARN or ERROR
+          terraform-loglevel: false
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Backup Terraform
+      - name: Backup Terraform
+        uses: emvaldes/terraform-controller@master
+        id: backup-terraform
+        with:
+          backup-terraform: ${BACKUP_TERRAFORM}
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Terraform Configuration
+      - name: Terraform Configuration
+        uses: emvaldes/terraform-controller@master
+        id: terraform-configuration
+        with:
+          terraform-config: true
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Terraform System-State
+      - name: Terraform System-State
+        uses: emvaldes/terraform-controller@master
+        id: terraform-systemstate
+        with:
+          terraform-tfstate: true
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Target Loadbalancer
+      - name: Target Loadbalancer
+        id: target-loadbalancer
+        shell: bash
+        run: |
+          target_loadbalancer="${TARGET_WORKSPACE}-nginx-elb-$(
+                terraform output resources_index
+              )" ;
+          echo "::set-env name=TARGET_LOADBALANCER::${target_loadbalancer}" ;
+          echo -e "\nTarget LoadBalancer: ${target_loadbalancer}";
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Monitoring Loadbalancer
+      - name: Monitoring Loadbalancer
+        uses: emvaldes/monitor-loadbalancer@master
+        id: monitor-loadbalancer
+        with:
+          target-loadbalancer: ${TARGET_LOADBALANCER}
+          loadbalancer-status: true
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## LoadBalancer Network-Interfaces
+      - name: LoadBalancer Interfaces
+        uses: emvaldes/monitor-loadbalancer@master
+        id: loadbalancer-interfaces
+        with:
+          target-loadbalancer: ${TARGET_LOADBALANCER}
+          loadbalancer-interfaces: true
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## LoadBalancer Network-Configuration
+      - name: LoadBalancer Configuration
+        uses: emvaldes/monitor-loadbalancer@master
+        id: loadbalancer-configuration
+        with:
+          target-loadbalancer: ${TARGET_LOADBALANCER}
+          loadbalancer-configuration: true
+        continue-on-error: false
+####----------------------------------------------------------------------------
+      ## Destroy Terraform
+      - name: Destroy Terraform
+        uses: emvaldes/terraform-controller@master
+        id: destroy-terraform
+        with:
+          destroy-terraform: ${DESTROY_TERRAFORM}
+## Terraform Log-levels: TRACE, DEBUG, INFO, WARN or ERROR
+          terraform-loglevel: false
+        continue-on-error: false
+####----------------------------------------------------------------------------

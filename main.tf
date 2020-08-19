@@ -47,6 +47,19 @@ data "template_file" "public_cidrsubnet" {
 # RESOURCES
 ##################################################################################
 
+data "aws_elb_hosted_zone_id" "main" {}
+
+# resource "aws_route53_record" "testing" {
+#   zone_id = var.zone_id
+#   name    = local.route53_record
+#   type    = "A"
+#   alias {
+#     name                   = aws_elb.web.dns_name
+#     zone_id                = data.aws_elb_hosted_zone_id.main.id
+#     evaluate_target_health = true
+#   }
+# }
+
 #Random ID
 resource "random_integer" "rand" {
   min = 10000
@@ -147,6 +160,14 @@ resource "aws_elb" "web" {
     lb_protocol       = "http"
   }
 
+  health_check {
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    target              = "TCP:80"
+    interval            = 30
+  }
+
   tags = merge(local.common_tags, { Name = "${local.env_name}-elb-${local.env_index}" })
 
 }
@@ -158,7 +179,7 @@ resource "aws_instance" "nginx" {
   instance_type          = var.instance_size[terraform.workspace]
   subnet_id              = module.vpc.public_subnets[count.index % var.subnet_count[terraform.workspace]]
   vpc_security_group_ids = [aws_security_group.nginx-sg.id]
-  key_name               = var.key_name
+  key_name               = var.private_keypair_name
   iam_instance_profile   = module.bucket.instance_profile.name
   depends_on             = [module.bucket]
 
@@ -166,7 +187,7 @@ resource "aws_instance" "nginx" {
     type        = "ssh"
     host        = self.public_ip
     user        = "ec2-user"
-    private_key = file(var.private_key_path)
+    private_key = file(var.private_keypair_file)
 
   }
 
@@ -203,6 +224,24 @@ EOF
     destination = "/home/ec2-user/nginx"
   }
 
+  provisioner "file" {
+    content = <<EOF
+<html>
+    <head>
+        <title>${local.corporate_title}</title>
+    </head>
+    <body style="background-color:#000000">
+        <p style="text-align: center;">
+            <img src="${local.corporate_image}" alt="${local.corporate_title}" style="margin-left:auto;margin-right:auto">
+        </p>
+    </body>
+</html>
+
+EOF
+
+    destination = "/home/ec2-user/index.html"
+  }
+
   provisioner "remote-exec" {
     inline = [
       "sudo yum install nginx -y",
@@ -210,10 +249,10 @@ EOF
       "sudo cp /home/ec2-user/.s3cfg /root/.s3cfg",
       "sudo cp /home/ec2-user/nginx /etc/logrotate.d/nginx",
       "sudo pip install s3cmd",
-      "s3cmd get s3://${module.bucket.bucket.id}/website/index.html .",
-      "s3cmd get s3://${module.bucket.bucket.id}/website/Globo_logo_Vert.png .",
+      "## s3cmd get s3://${module.bucket.bucket.id}/website/index.html . --force",
+      "s3cmd get s3://${module.bucket.bucket.id}/website/${local.corporate_image} . --force",
       "sudo cp /home/ec2-user/index.html /usr/share/nginx/html/index.html",
-      "sudo cp /home/ec2-user/Globo_logo_Vert.png /usr/share/nginx/html/Globo_logo_Vert.png",
+      "sudo cp /home/ec2-user/${local.corporate_image} /usr/share/nginx/html/${local.corporate_image}",
       "sudo logrotate -f /etc/logrotate.conf"
 
     ]
@@ -225,21 +264,28 @@ EOF
 # S3 Bucket config#
 module "bucket" {
   name   = local.s3_bucket_name
-  source = "./Modules/s3"
-  # source      = "terraform-aws-modules/s3-bucket/aws"
+  source = "./modules/s3"
+  # source = "terraform-aws-modules/s3-bucket/aws"
   common_tags = local.common_tags
 }
+# Error: Unsupported argument
+#   on resources.tf line 245, in module "bucket":
+#  245:   name = local.s3_bucket_name
+# An argument named "name" is not expected here.
+# Error: Unsupported argument
+#   on resources.tf line 248, in module "bucket":
+#  248:   common_tags = local.common_tags
+# An argument named "common_tags" is not expected here.
 
-resource "aws_s3_bucket_object" "website" {
-  bucket = module.bucket.bucket.id
-  key    = "/website/index.html"
-  source = "./index.html"
 
-}
+# resource "aws_s3_bucket_object" "website" {
+#   bucket = module.bucket.bucket.id
+#   key    = "/website/index.html"
+#   source = "./website/index.html"
+# }
 
 resource "aws_s3_bucket_object" "graphic" {
   bucket = module.bucket.bucket.id
-  key    = "/website/Globo_logo_Vert.png"
-  source = "./Globo_logo_Vert.png"
-
+  key    = "/website/${local.corporate_image}"
+  source = "./website/${local.corporate_image}"
 }
