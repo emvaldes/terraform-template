@@ -102,63 +102,63 @@ jobs:
           ## Parsing GitHub Action - Workflow dispatch (limited to 10 input-params)
           echo -e "Processing File|Input-based Parameters ... [ 1-10 ]\n" ;
           ####------------------------------------------------------------------
-          eval "echo '::set-env name=TARGET_WORKSPACE::$(
+          echo "TARGET_WORKSPACE=$(
               cat ${{ github.workspace }}/workspace \
               | grep -vxE '[[:blank:]]*([#;].*)?' \
-              | tr -d "[:space:]"
-            )'" ;
+              | tr -d '[:space:]'
+            )" >> ${GITHUB_ENV} ;
           ####------------------------------------------------------------------
-          eval "echo '::set-env name=SESSION_TIMESTAMP::$(date +"%y%m%d%H%M%S")'" ;
-          echo '::set-env name=AWS_ACCESS_KEY_ID::${{ secrets.AWS_ACCESS_KEY_ID }}'
-          echo '::set-env name=AWS_SECRET_ACCESS_KEY::${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+          echo "SESSION_TIMESTAMP=$(date +"%y%m%d%H%M%S")" >> ${GITHUB_ENV} ;
+          echo "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}" >> ${GITHUB_ENV} ;
+          echo "AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}" >> ${GITHUB_ENV} ;
           ####------------------------------------------------------------------
           custom_workspace="${{ github.event.inputs.workspace }}" ;
           if [[ (${#custom_workspace} -gt 0) && (${custom_workspace} != '') ]]; then
             echo -e "       Target Workspace [input-based]: '${custom_workspace}'" ;
-            eval "echo '::set-env name=TARGET_WORKSPACE::${custom_workspace}'" ;
+            echo "TARGET_WORKSPACE=${custom_workspace}" >> ${GITHUB_ENV} ;
           fi ;
           ####------------------------------------------------------------------
           cloud_region="${{ github.event.inputs.region }}" ;
           if [[ (${#cloud_region} -gt 0 ) && (${cloud_region} != '') ]]; then
             echo -e "    Target Cloud Region [input-based]: '${cloud_region}'" ;
-            eval "echo '::set-env name=AWS_DEFAULT_REGION::${cloud_region}'" ;
+            echo "AWS_DEFAULT_REGION=${cloud_region}" >> ${GITHUB_ENV} ;
           fi ;
           ####------------------------------------------------------------------
           cloud_account="${{ github.event.inputs.account }}" ;
           if [[ (${#cloud_account} -gt 0 ) && (${cloud_account} != '') ]]; then
             echo -e "   Target Cloud Account [input-based]: '${cloud_account}'" ;
-            eval "echo '::set-env name=AWS_DEFAULT_ACCOUNT::${cloud_account}'" ;
+            echo "AWS_DEFAULT_ACCOUNT=${cloud_account}" >> ${GITHUB_ENV} ;
           fi;
           ####------------------------------------------------------------------
           access_keyid="${{ github.event.inputs.accesskey }}" ;
           if [[ (${#access_keyid} -gt 0 ) && (${access_keyid} != '') ]]; then
             echo -e "   Target Access Key-ID [input-based]: '${access_keyid}'" ;
-            eval "echo '::set-env name=AWS_ACCESS_KEY_ID::${access_keyid}'" ;
+            echo "AWS_ACCESS_KEY_ID=${access_keyid}" >> ${GITHUB_ENV} ;
           fi;
           ####------------------------------------------------------------------
           secret_keyid="${{ github.event.inputs.secretkey }}" ;
           if [[ (${#secret_keyid} -gt 0 ) && (${secret_keyid} != '') ]]; then
             echo -e "   Target Secret Key-ID [input-based]: '${secret_keyid}'" ;
-            eval "echo '::set-env name=AWS_SECRET_ACCESS_KEY::${secret_keyid}'" ;
+            echo "AWS_SECRET_ACCESS_KEY=${secret_keyid}" >> ${GITHUB_ENV} ;
           fi;
           ####------------------------------------------------------------------
           keypair_name="${{ github.event.inputs.keypair-name }}" ;
           if [[ (${#keypair_name} -gt 0 ) && (${keypair_name} != '') ]]; then
             echo -e "  Private Key-Pair Name [input-based]: '${keypair_name}'" ;
-            eval "echo '::set-env name=PRIVATE_KEYPAIR_NAME::${keypair_name}'" ;
+            echo "PRIVATE_KEYPAIR_NAME=${keypair_name}" >> ${GITHUB_ENV} ;
           fi;
           ####------------------------------------------------------------------
           keypair_secret="${{ github.event.inputs.keypair-secret }}" ;
           if [[ (${#keypair_secret} -gt 0 ) && (${keypair_secret} != '') ]]; then
             private_keypair_secret="$(echo -e "${keypair_secret}" | sed -e "s|;$||" | tr ';' '\n')";
             echo -e "Private Key-Pair Secret [input-based]: \n'***'" ;
-            eval "echo '::set-env name=PRIVATE_KEYPAIR_SECRET::${private_keypair_secret}'" ;
+            echo "PRIVATE_KEYPAIR_SECRET=${private_keypair_secret}" >> ${GITHUB_ENV} ;
           fi;
           ####------------------------------------------------------------------
           destroy_terraform="${{ github.event.inputs.destroy-terraform }}" ;
           if [[ (${#destroy_terraform} -gt 0 ) && (${destroy_terraform} != true) ]]; then
             echo -e "      Destroy Terraform [input-based]: \n'${destroy_terraform}'" ;
-            eval "echo '::set-env name=DESTROY_TERRAFORM::${destroy_terraform}'" ;
+            echo "DESTROY_TERRAFORM=${destroy_terraform}" >> ${GITHUB_ENV} ;
           fi;
 ####----------------------------------------------------------------------------
       ## System Requirements
@@ -208,13 +208,13 @@ jobs:
           ##   decrypted=$(echo -en "${encrypted}" | base64 --decode) ;
           ##   echo -e "${encrypted} -> ${decrypted}" ;
           ## done ;
-          eval "echo '::set-env name=terraform_input_params::$(
+          echo "terraform_input_params=$(
               for xitem in ${custom_params[@]}; do
                 echo -en "`echo -en ${xitem} | base64 -w0 | tr -d '\n\r'`_" ;
               done | sed -e 's|\(.*\)\(\_\)$|\1|' ;
-            )'" ;
+            )" >> ${GITHUB_ENV} ;
           IFS="${oIFS}" ;
-          eval "echo '::set-env name=terraform_input_tfvars::configs/${TARGET_WORKSPACE}-configs.tfvars'" ;
+          echo "terraform_input_tfvars=configs/${TARGET_WORKSPACE}-configs.tfvars" >> ${GITHUB_ENV} ;
         continue-on-error: false
 ####----------------------------------------------------------------------------
       ## Requesting Credentials
@@ -295,7 +295,7 @@ jobs:
           target_loadbalancer="${TARGET_WORKSPACE}-nginx-elb-$(
                 terraform output resources_index
               )" ;
-          echo "::set-env name=TARGET_LOADBALANCER::${target_loadbalancer}" ;
+          echo "TARGET_LOADBALANCER=${target_loadbalancer}" >> ${GITHUB_ENV} ;
           echo -e "\nTarget LoadBalancer: ${target_loadbalancer}";
         continue-on-error: false
 ####----------------------------------------------------------------------------
