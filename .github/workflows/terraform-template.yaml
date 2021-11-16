@@ -170,6 +170,7 @@ jobs:
           install-custom-tools: 'netcat'
           install-default-tools: true
           install-terraform-cli: latest
+          target-terraform-version: '0.13.1'
           update-operating-system: ${UPDATE_SYSTEM_LATEST}
           update-python-version: ${UPDATE_PYTHON_LATEST}
         continue-on-error: false
@@ -250,7 +251,7 @@ jobs:
           terraform-input-params: "${terraform_input_params}"
           terraform-input-tfvars: "${terraform_input_tfvars}"
 ## Terraform Log-levels: TRACE, DEBUG, INFO, WARN or ERROR
-          terraform-loglevel: false
+          terraform-loglevel: TRACE
         continue-on-error: false
 ####----------------------------------------------------------------------------
       ## Deploy Terraform
@@ -260,7 +261,7 @@ jobs:
         with:
           deploy-terraform: ${DEPLOY_TERRAFORM}
 ## Terraform Log-levels: TRACE, DEBUG, INFO, WARN or ERROR
-          terraform-loglevel: false
+          terraform-loglevel: TRACE
         continue-on-error: false
 ####----------------------------------------------------------------------------
       ## Backup Terraform
